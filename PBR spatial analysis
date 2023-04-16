@@ -1,0 +1,294 @@
+##Productivity-mammal
+
+#set working directorate
+setwd("D:/MSc/Project data/Final Raw and procesed/Final process 3/ProductivityBiodiversity Scripts/Count raster/Mammals")
+
+library(raster)
+library(WVPlots)
+
+#load productivity
+Mean.pro <- raster("D:/MSc/Project data/Final Raw and procesed/Final process 4 productivity/forest_productivity.tif")
+hist(values(Mean.pro), breaks=40, main=NA, xlab="Forest productivity gCm2/y")
+
+#Remove outliers
+Mean.pro[values(Mean.pro)>1500] <- NA
+Mean.pro[values(Mean.pro)<0.00001] <- NA
+
+#list path with folder containing the raster
+Mammal.file <- list.files(path = "/Project data/Final Raw and procesed/Final process 3/Mammals data/Mammal rasters", pattern = ".tif$", full.names=TRUE,recursive=FALSE)
+
+#stack rasters
+
+Mammal.stack <- stack(Mammal.file)
+
+#define thresholds in sequential order as the stacked rasters
+Mammal.threshold <- Mammal.stack>c(0.408,
+                                   0.338,
+                                   .....)
+
+
+#check to see if names from raster stack correspond with raster threshold
+names(Mammal.stack)[15]
+names(Mammal.threshold)[15]
+
+# add raster to get total species count
+Mammal.thre_sum <- stackApply(Mammal.threshold, 1, na.rm = T, fun = sum)
+hist(values(Mammal.thre_sum), breaks=40, main=NA, xlab="Mammal")
+
+#remove outliers
+Mammal.thre_sum[values(Mammal.thre_sum)>49] <- NA
+
+###sample the data
+d<-data.frame(Productivity=values(Mean.pro),Sp_count=values(Mammal.thre_sum))
+d.sample<-sample(c(1:length(d$Productivity)),floor(0.009*length(d$Productivity)), replace=F)
+d.sample<-d[d.sample,]
+
+#create scatterplot
+ScatterHist(d.sample,"Productivity","Sp_count", title="Mammal sum", estimate_sig = T)
+
+#linear model
+model.ln <- lm(Sp_count ~ Productivity, data = d.sample)
+summary(model.ln)
+
+#quad model
+model.poly <- lm(Sp_count ~ Productivity + I(Productivity^2), data = d.sample)
+summary(model.poly)
+
+#Margalef index
+## defined as no. of species divided by natural log of the total no. of individuals
+
+## D = n-1/lnN
+n <- apply(Mammal.threshold[na.rm = T]>0, 1, sum)
+N <- apply(Mammal.threshold[na.rm = T], 1, sum)
+D <- (n-1)/log(N)
+
+#resulting raster does not have coordinate reference system
+#import it from a mask file
+mask<-raster("D:/MSc/Project data/Final Raw and procesed/Working environment/MaskReproject.tif")
+
+margalef.matrix<-matrix(D,nrow=mask@nrows,ncol=mask@ncols,byrow=TRUE)
+
+mamal_margalef.rs<-raster(margalef.matrix,
+                    crs=mask@crs, ## CRS
+                    xmn=mask@extent@xmin,## outer coordinates of the bounding box
+                    ymn=mask@extent@ymin,
+                    xmx=mask@extent@xmax,
+                    ymx=mask@extent@ymax)
+plot(mamal_margalef.rs)
+
+hist(mamal_margalef.rs, breaks=40)
+
+#remove outliers
+mamal_margalef.rs[values(mamal_margalef.rs)>14] <- NA
+
+writeRaster(mamal_margalef.rs, filename = file.choose(new = T)) # to save raster
+
+m<-data.frame(Productivity=values(Mean.pro),Sp_margalef=values(mamal_margalef.rs))
+m.sample<-sample(c(1:length(m$Productivity)),floor(0.009*length(m$Productivity)))
+m.sample<-m[m.sample,]
+
+ScatterHist(m.sample,"Productivity","Sp_margalef", title="Mammal Margalef", estimate_sig = T)
+
+#linear model
+linear_margalef <- lm(Sp_margalef ~ Productivity, data = m.sample)
+summary(linear_margalef)
+
+#quad model
+poly_margalef <- lm(Sp_margalef ~ Productivity + I(Productivity^2), data = m.sample)
+summary(poly_margalef)
+
+##shannon index
+library(vegan)
+
+mammal.shannon <- diversity(Mammal.threshold[na.rm = T], index = "shannon", MARGIN = 1, base = exp(1))
+
+mask<-raster("D:/MSc/Project data/Final Raw and procesed/Working environment/MaskReproject.tif")
+
+mamal.shannon.matrix <- matrix(mammal.shannon, nrow = mask@nrows,ncol = mask@ncols, byrow = TRUE)
+mamal.shannon.rs<-raster(mamal.shannon.matrix,
+                   crs=mask@crs, ## coordinate reference system
+                   xmn=mask@extent@xmin,## outer coordinates of the bounding box
+                   ymn=mask@extent@ymin,
+                   xmx=mask@extent@xmax,
+                   ymx=mask@extent@ymax)
+
+plot(mamal.shannon.rs)
+
+#sample the data
+sh<-data.frame(Productivity=values(Mean.pro),Sp_shanon=values(mamal.shannon.rs))
+sh.sample<-sample(c(1:length(sh$Productivity)),floor(0.009*length(sh$Productivity)), replace = F)
+sh.sample<-sh[sh.sample,]
+
+ScatterHist(sh.sample,"Productivity","Sp_shanon", title="Mammal shannon", estimate_sig = T)
+
+#linear model
+linear_shanon <- lm(Sp_shanon ~ Productivity, data = sh.sample)
+summary(linear_margalef)
+
+#quad model
+poly_shanon <- lm(Sp_shanon ~ Productivity + I(Productivity^2), data = sh.sample)
+summary(poly_shanon)
+
+#Simpson index
+library(vagan)
+mamal.simpson <- diversity(Mammal.threshold[na.rm = T], index = "simpson")
+
+mamal.simpson.matrix <- matrix(mamal.simpson, nrow = mask@nrows,ncol = mask@ncols, byrow = TRUE)
+mamal.simpson.rs<-raster(mamal.simpson.matrix,
+                     crs=mask@crs, ## coordinate reference system
+                     xmn=mask@extent@xmin,## outer coordinates of the bounding box
+                     ymn=mask@extent@ymin,
+                     xmx=mask@extent@xmax,
+                     ymx=mask@extent@ymax)
+plot(mamal.simpson.rs)
+
+#sample
+p<-data.frame(Productivity=values(Mean.pro),Sp_simpson=values(mamal.simpson.rs))
+p.sample<-sample(c(1:length(p$Productivity)),floor(0.009*length(p$Productivity)), replace = F)
+p.sample<-p[p.sample,]
+
+ScatterHist(p.sample,"Productivity","Sp_simpson", title="Mammal simpson", estimate_sig = T)
+
+#linear model
+linear_simpson <- lm(Sp_simpson ~ Productivity, data = m.sample)
+summary(linear_simpson)
+
+#quad model
+poly_simpson <- lm(Sp_simpson ~ Productivity + I(Productivity^2), data = m.sample)
+summary(poly_simpson)
+####the end
+
+#Conifer Forest productivity
+Conifer.pro <- raster("/Project data/Final Raw and procesed/Final species total/Masking specified abov ten/Productivity for specified/Coniferous_productivity.tif")
+hist(values(Conifer.pro), breaks=40, main=NA, xlab="Forest productivity gCm2/y")
+
+#Remove outliers
+Conifer.pro[values(Conifer.pro)>1500] <- NA
+Conifer.pro[values(Conifer.pro)<0.00001] <- NA
+plot(Conifer.pro)
+
+d<-data.frame(Conifer.Productivity=values(Conifer.pro),Sp_count=values(Mammal.thre_sum))
+d.sample<-sample(c(1:length(d$Conifer.Productivity)),floor(0.009*length(d$Conifer.Productivity)), replace=F)
+d.sample<-d[d.sample,]
+
+#create scatterplot
+ScatterHist(d.sample,"Conifer.Productivity","Sp_count", title="Mammal sum", estimate_sig = T)
+
+#linear model
+model.ln <- lm(Sp_count ~ Conifer.Productivity, data = d.sample)
+summary(model.ln)
+
+#quad model
+model.poly <- lm(Sp_count ~ Conifer.Productivity + I(Conifer.Productivity^2), data = d.sample)
+summary(model.poly)
+
+#Conifer and margalef
+m<-data.frame(Conifer.Productivity=values(Conifer.pro),Sp_margalef=values(mamal_margalef.rs))
+m.sample<-sample(c(1:length(m$Conifer.Productivity)),floor(0.009*length(m$Conifer.Productivity)))
+m.sample<-m[m.sample,]
+
+ScatterHist(m.sample,"Conifer.Productivity","Sp_margalef", title="Mammal Margalef", estimate_sig = T)
+
+#linear model
+linear_margalef <- lm(Sp_margalef ~ Conifer.Productivity, data = m.sample)
+summary(linear_margalef)
+
+#quad model
+poly_margalef <- lm(Sp_margalef ~ Conifer.Productivity + I(Conifer.Productivity^2), data = m.sample)
+summary(poly_margalef)
+
+#conifer and shannon
+#sample the data
+sh<-data.frame(Conifer.Productivity=values(Conifer.pro),Sp_shanon=values(mamal.shannon.rs))
+sh.sample<-sample(c(1:length(sh$Conifer.Productivity)),floor(0.009*length(sh$Conifer.Productivity)), replace = F)
+sh.sample<-sh[sh.sample,]
+
+ScatterHist(sh.sample,"Conifer.Productivity","Sp_shanon", title="Mammal shannon", estimate_sig = T)
+
+#linear model
+linear_shanon <- lm(Sp_shanon ~ Conifer.Productivity, data = sh.sample)
+summary(linear_margalef)
+
+#quad model
+poly_shanon <- lm(Sp_shanon ~ Conifer.Productivity + I(Conifer.Productivity^2), data = sh.sample)
+summary(poly_shanon)
+
+#Conifer Simpson
+p<-data.frame(Conifer.Productivity=values(Conifer.pro),Sp_simpson=values(mamal.simpson.rs))
+p.sample<-sample(c(1:length(p$Conifer.Productivity)),floor(0.009*length(p$Conifer.Productivity)), replace = F)
+p.sample<-p[p.sample,]
+
+ScatterHist(p.sample,"Conifer.Productivity","Sp_simpson", title="Mammal simpson", estimate_sig = T)
+
+#linear model
+linear_simpson <- lm(Sp_simpson ~ Conifer.Productivity, data = m.sample)
+summary(linear_simpson)
+
+#Broadleaved forest productivity
+Broad.pro <- raster("/Project data/Final Raw and procesed/Final species total/Masking specified abov ten/Productivity for specified/Broadleaved_productivity.tif")
+hist(values(Broad.pro), breaks=40, main=NA, xlab="Forest productivity gCm2/y")
+
+#Remove outliers
+Broad.pro[values(Broad.pro)>1500] <- NA
+Broad.pro[values(Broad.pro)<0.00001] <- NA
+
+d<-data.frame(Broad.Productivity=values(Broad.pro),Sp_count=values(Mammal.thre_sum))
+d.sample<-sample(c(1:length(d$Broad.Productivity)),floor(0.009*length(d$Broad.Productivity)), replace=F)
+d.sample<-d[d.sample,]
+
+#create scatterplot
+ScatterHist(d.sample,"Broad.Productivity","Sp_count", title="Mammal sum", estimate_sig = T)
+
+#linear model
+model.ln <- lm(Sp_count ~ Broad.Productivity, data = d.sample)
+summary(model.ln)
+
+#quad model
+model.poly <- lm(Sp_count ~ Broad.Productivity + I(Broad.Productivity^2), data = d.sample)
+summary(model.poly)
+
+#Broaleaved and margalef
+m<-data.frame(Broad.Productivity=values(Broad.pro),Sp_margalef=values(mamal_margalef.rs))
+m.sample<-sample(c(1:length(m$Broad.Productivity)),floor(0.009*length(m$Broad.Productivity)))
+m.sample<-m[m.sample,]
+
+ScatterHist(m.sample,"Broad.Productivity","Sp_margalef", title="Mammal Margalef", estimate_sig = T)
+
+#linear model
+linear_margalef <- lm(Sp_margalef ~ Broad.Productivity, data = m.sample)
+summary(linear_margalef)
+
+#quad model
+poly_margalef <- lm(Sp_margalef ~ Broad.Productivity + I(Broad.Productivity^2), data = m.sample)
+summary(poly_margalef)
+
+#Broadleaved and shannon
+#sample the data
+sh<-data.frame(Broad.Productivity=values(Broad.pro),Sp_shanon=values(mamal.shannon.rs))
+sh.sample<-sample(c(1:length(sh$Broad.Productivity)),floor(0.009*length(sh$Broad.Productivity)), replace = F)
+sh.sample<-sh[sh.sample,]
+
+ScatterHist(sh.sample,"Broad.Productivity","Sp_shanon", title="Mammal shannon", estimate_sig = T)
+
+#linear model
+linear_shanon <- lm(Sp_shanon ~ Broad.Productivity, data = sh.sample)
+summary(linear_margalef)
+
+#quad model
+poly_shanon <- lm(Sp_shanon ~ Broad.Productivity + I(Broad.Productivity^2), data = sh.sample)
+summary(poly_shanon)
+
+#Broadleaved Simpson
+p<-data.frame(Broad.Productivity=values(Broad.pro),Sp_simpson=values(mamal.simpson.rs))
+p.sample<-sample(c(1:length(p$Broad.Productivity)),floor(0.009*length(p$Broad.Productivity)), replace = F)
+p.sample<-p[p.sample,]
+
+ScatterHist(p.sample,"Broad.Productivity","Sp_simpson", title="Mamal simpson", estimate_sig = T)
+
+#linear model
+linear_simpson <- lm(Sp_simpson ~ Broad.Productivity, data = m.sample)
+summary(linear_simpson)
+
+#quad model
+poly_simpson <- lm(Sp_simpson ~ Broad.Productivity + I(Broad.Productivity^2), data = sh.sample)
+summary(poly_simpson)
